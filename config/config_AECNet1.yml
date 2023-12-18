@@ -1,0 +1,102 @@
+#initial settings
+setup:
+    name: AECNet1_scalp_mixed_robust
+    output_path: output/
+    trainModel: true
+dataset:
+    name: [SimulatedERPDataset, ExperimentalERPDataset]
+    folder: ./data
+    pre_processed: [EventAAD_scalp_prdg_1_new_-0.2_0.8_256_loc_1_sbj_all_24.npz , EventAAD_scalp_prdg_2_new_-0.2_0.8_256_loc_1_sbj_all_24.npz, EventAAD_scalp_prdg_3_new_-0.2_0.8_256_loc_1_sbj_all_24.npz]
+    
+    # name: [ExperimentalERPDataset]
+    # folder: ./data
+    # pre_processed: [EventAAD_scalp_prdg_1_new_-0.2_0.8_256_loc_1_sbj_all_24.npz]    
+    
+    scaler:
+        type: RobustScaler
+        feature_range: [-1,1]
+        path: ./data/EventAAD_scalp_mixed_RobustScaler.scl        
+    leave_one_out: true
+    num_sbjs: 24
+    from_sbj: 0
+    to_sbj: 24
+    ERP_types: 2
+    L: 1000
+    sr: 256
+    nb_classes: 1
+    start: 0
+    end: 1000
+    
+    upsampling: true
+    factor: 2
+    soft_label: false
+    min_seed: 1
+    max_seed: 3
+    
+    simulated: true
+    synthesized_type: real
+    latency_std: 0.01
+    min_w: 0.3
+    max_w: 0.6
+    SNR: [0, 3, 6]
+    spectrogramer:
+        n_fft: 128
+        hop_length: 4
+
+    channels: ['Fp1', 'Fpz', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'FC5', 'FC1', 'FC2', 'FC6', 'M1', 'T7-T3', 'C3', 'Cz', 'C4', 'T8-T4', 'M2', 'CP5', 'CP1', 'CP2', 'CP6', 'P7-T5', 'P3', 'Pz', 'P4', 'P8-T6', 'POz', 'O1', 'Oz', 'O2']
+    channels_erp: ['Pz']    
+
+
+model:
+    tag: AECNet1
+    model_name: AECNet1
+    hybrid_training: false
+    erp_forcing: false
+    # pretrained: ./output/AECNet1_scalp_mixed_robust
+    pretrained: null
+    fex:
+        type: EEGNet
+        F1: 8
+        D: 2
+        F2: 32
+        norm_rate: 0.25
+        dropoutRate: 0.2
+        kernLength: 128
+        spatial_filter:
+            type: null
+            n_components: 1
+            filter_path: null
+        freeze: false
+        pretrained: null
+    classifier:
+        type: LinearClassifier
+        freeze: false
+        in_features: 256
+        out_features: 1
+        pretrained: null
+        
+learning:
+    nFold: 8
+    nRep: 1
+    threshold: 0.5
+    loss_function:
+        name: BCELoss
+        erp_loss: MSELoss        
+    optimizer:
+        opt: Adam
+        lr: 0.0001
+        lr_decay_step: 100000
+        lr_decay_gamma: 0.5
+        eps: 0.00000001
+        weight_decay: 0
+        momentum: 0
+        betas: (0.9, 0.999)
+    running:
+        num_workers: 0
+        batch_size: 64
+        epochs: 100
+        lambda: 100.0
+        print_every: 1
+        parallelization: multi-fold
+        device: [cpu, 0]
+        save_path: AECNet1_EEGNet.pth
