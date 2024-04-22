@@ -114,17 +114,8 @@ def trainSubjecIndependent(config, jobname):
     else:
         path = os.path.join(data_folder, data_files)
         loaded_data = makeERPdata(path)  
-    pkl_filename = os.path.abspath('splits.pkl')
-    if os.path.exists(pkl_filename):
-        print(f'loading splits file: {pkl_filename}')
-        # loading data:        
-        with open(pkl_filename, 'rb') as f:
-            splits = pickle.load(f)[0]
-    else:
-        print(f'creating splits file: {pkl_filename}')
-        splits = make_splits(loaded_data, nFold)
-        with open(pkl_filename, 'wb') as f:
-            pickle.dump([splits], f)
+    
+    splits = make_splits(loaded_data, nFold)
 
     if parallelization == 'multi-fold':
         # multi-fold parallelization
@@ -146,40 +137,40 @@ def trainSubjecIndependent(config, jobname):
             else:
                 trainset, validset, testset = get_splited_datasets(fold, loaded_data, splits, dataset_params)
             
-                # dataloader
-                trainLoader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
-                model_path = os.path.join(output_path, f"{model_params['model_name']}_SI_fold_{fold}.pth")
-                if model_params['pretrained'] is not None:
-                    model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
-                else:
-                    model.pretrained = None
-                model.initialize()
-                if trainModel:
-                    if (type(devices) is list) and (len(devices) > 1):
-                        fit_data_parallel(model, criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, devices, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}')
-                    else:                
-                        fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, devices, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}', print_every=1)
-                # evaluate
-                _,_,_, thrhs[fold] = evaluate(model, validLoader, validset.scaler, devices, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_valid', print_output=False)
-                train_loss, train_accs[fold], train_F1[fold], threshold = evaluate(model, trainLoader, trainset.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_train', print_output=False)
-                test_loss, test_accs[fold], test_F1[fold], threshold = evaluate(model, testLoader, testset.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_test', print_output=False)                
-                if type(loaded_data) is list: # single DS evaluation
-                    ds_config = copy.deepcopy(dataset_params)
-                    ds_config['min_seed'] = 1
-                    ds_config['max_seed'] = 1
-                    ds_config['name'] = ['ExperimentalERPDataset']
-                    _, _, mixed_testset1 = get_mixed_splited_datasets(fold, loaded_data, splits, ds_config)
-                    ds_config['name'] = ['ExperimentalERPDataset']
-                    ds_config['upsampling'] = False
-                    _, _, mixed_testset2 = get_mixed_splited_datasets(fold, loaded_data, splits, ds_config)
-                    for ds1, ds2, idx in zip(mixed_testset1, mixed_testset2, range(len(mixed_testset1))):
-                        loader1 = DataLoader(dataset=ds1, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                        loader2 = DataLoader(dataset=ds2, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                        _, separated_accs[0,idx,fold], separated_F1[0,idx,fold],_ = evaluate(model, loader1, ds1.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False)
-                        _, separated_accs[1,idx,fold], separated_F1[1,idx,fold],_ = evaluate(model, loader2, ds2.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False, weighted=True)          
-                        del ds1, ds2                        
+            # dataloader
+            trainLoader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+            validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+            testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
+            model_path = os.path.join(output_path, f"{model_params['model_name']}_SI_fold_{fold}.pth")
+            if model_params['pretrained'] is not None:
+                model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
+            else:
+                model.pretrained = None
+            model.initialize()
+            if trainModel:
+                if (type(devices) is list) and (len(devices) > 1):
+                    fit_data_parallel(model, criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, devices, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}')
+                else:                
+                    fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, devices, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}', print_every=1)
+            # evaluate
+            _,_,_, thrhs[fold] = evaluate(model, validLoader, validset.scaler, devices, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_valid', print_output=False)
+            train_loss, train_accs[fold], train_F1[fold], threshold = evaluate(model, trainLoader, trainset.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_train', print_output=False)
+            test_loss, test_accs[fold], test_F1[fold], threshold = evaluate(model, testLoader, testset.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_test', print_output=False)                
+            if type(loaded_data) is list: # single DS evaluation
+                ds_config = copy.deepcopy(dataset_params)
+                ds_config['min_seed'] = 1
+                ds_config['max_seed'] = 1
+                ds_config['name'] = ['ExperimentalERPDataset']
+                _, _, mixed_testset1 = get_mixed_splited_datasets(fold, loaded_data, splits, ds_config)
+                ds_config['name'] = ['ExperimentalERPDataset']
+                ds_config['upsampling'] = False
+                _, _, mixed_testset2 = get_mixed_splited_datasets(fold, loaded_data, splits, ds_config)
+                for ds1, ds2, idx in zip(mixed_testset1, mixed_testset2, range(len(mixed_testset1))):
+                    loader1 = DataLoader(dataset=ds1, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+                    loader2 = DataLoader(dataset=ds2, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+                    _, separated_accs[0,idx,fold], separated_F1[0,idx,fold],_ = evaluate(model, loader1, ds1.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False)
+                    _, separated_accs[1,idx,fold], separated_F1[1,idx,fold],_ = evaluate(model, loader2, ds2.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False, weighted=True)          
+                    del ds1, ds2                        
             del trainset, validset, testset, mixed_trainset, mixed_validset, mixed_testset
     print(f'train_accs: {train_accs}')
     print(f'test_accs: {test_accs}')
@@ -288,18 +279,8 @@ def trainAndCrossValidate(config, jobname):
     else:
         path = os.path.join(data_folder, data_files)
         loaded_data = makeERPdata(path)
-    pkl_filename = os.path.abspath('splits.pkl')        
-    print(f'splits filename: {pkl_filename}')
-    if os.path.exists(pkl_filename):
-        print(f'loading splits file: {pkl_filename}')
-        # loading data:        
-        with open(pkl_filename, 'rb') as f:
-            splits = pickle.load(f)[0]   
-    else:
-        print(f'creating splits file: {pkl_filename}')
-        splits = make_splits(loaded_data, nFold)
-        with open(pkl_filename, 'wb') as f:
-            pickle.dump([splits], f)
+    
+    splits = make_splits(loaded_data, nFold)
     
     for i in range(from_sbj, to_sbj):            
         print(f'********** training - cross subject {i} **********')
@@ -325,42 +306,42 @@ def trainAndCrossValidate(config, jobname):
             trs, vs, ts = get_splited_datasets(0, loaded_data, splits, dataset_params, test_idxs)
             testset = MixedERPDataset([trs,vs,ts], scaler)
         
-            # dataloader
-            trainLoader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-            validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-            testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
-            model_path = os.path.join(output_path, f"{model_params['model_name']}_CS_{i}.pth")
-            if model_params['pretrained'] is not None:
-                model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
-            else:
-                model.pretrained = None                
-            model.initialize()
-            if trainModel:
-                fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_CS_{i}', print_every=1)
-            # evaluate
-            _,_,_, thrhs[i] = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_CS_{i}_valid', print_output=False)
-            train_loss, train_accs[i], train_F1[i], threshold = evaluate(model, trainLoader, trainset.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_train', print_output=False)
-            test_loss, test_accs[i], test_F1[i], threshold = evaluate(model, testLoader, testset.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_test', print_output=False)
-            if type(loaded_data) is list: # single DS evaluation
-                ds_config = copy.deepcopy(dataset_params)
-                ds_config['min_seed'] = 1
-                ds_config['max_seed'] = 1
-                ds_config['name'] = ['ExperimentalERPDataset']
-                mixed_trainset, mixed_validset, mixed_testset = get_mixed_splited_datasets(0, loaded_data, splits, ds_config, test_idxs)
-                for tr, v, t, idx in zip(mixed_trainset, mixed_validset, mixed_testset, range(len(mixed_validset))):
-                    ds = MixedERPDataset([tr,v,t], scaler)
-                    loader = DataLoader(dataset=ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                    _, separated_accs[0,idx,i], separated_F1[0,idx,i],_ = evaluate(model, loader, ds.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_ds_{idx}', print_output=False)
-                    del ds
-                ds_config['name'] = ['ExperimentalERPDataset']
-                ds_config['upsampling'] = False                    
-                mixed_trainset, mixed_validset, mixed_testset = get_mixed_splited_datasets(0, loaded_data, splits, ds_config, test_idxs)
-                for tr, v, t, idx in zip(mixed_trainset, mixed_validset, mixed_testset, range(len(mixed_validset))):
-                    ds = MixedERPDataset([tr,v,t], scaler)
-                    loader = DataLoader(dataset=ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                    _, separated_accs[1,idx,i], separated_F1[1,idx,i],_ = evaluate(model, loader, ds.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_ds_{idx}', print_output=False, weighted=True)
-                    del ds                        
-                del mixed_trainset, mixed_validset, mixed_testset, trs, vs, ts
+        # dataloader
+        trainLoader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+        validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+        testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
+        model_path = os.path.join(output_path, f"{model_params['model_name']}_CS_{i}.pth")
+        if model_params['pretrained'] is not None:
+            model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
+        else:
+            model.pretrained = None                
+        model.initialize()
+        if trainModel:
+            fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_CS_{i}', print_every=1)
+        # evaluate
+        _,_,_, thrhs[i] = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_CS_{i}_valid', print_output=False)
+        train_loss, train_accs[i], train_F1[i], threshold = evaluate(model, trainLoader, trainset.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_train', print_output=False)
+        test_loss, test_accs[i], test_F1[i], threshold = evaluate(model, testLoader, testset.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_test', print_output=False)
+        if type(loaded_data) is list: # single DS evaluation
+            ds_config = copy.deepcopy(dataset_params)
+            ds_config['min_seed'] = 1
+            ds_config['max_seed'] = 1
+            ds_config['name'] = ['ExperimentalERPDataset']
+            mixed_trainset, mixed_validset, mixed_testset = get_mixed_splited_datasets(0, loaded_data, splits, ds_config, test_idxs)
+            for tr, v, t, idx in zip(mixed_trainset, mixed_validset, mixed_testset, range(len(mixed_validset))):
+                ds = MixedERPDataset([tr,v,t], scaler)
+                loader = DataLoader(dataset=ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+                _, separated_accs[0,idx,i], separated_F1[0,idx,i],_ = evaluate(model, loader, ds.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_ds_{idx}', print_output=False)
+                del ds
+            ds_config['name'] = ['ExperimentalERPDataset']
+            ds_config['upsampling'] = False                    
+            mixed_trainset, mixed_validset, mixed_testset = get_mixed_splited_datasets(0, loaded_data, splits, ds_config, test_idxs)
+            for tr, v, t, idx in zip(mixed_trainset, mixed_validset, mixed_testset, range(len(mixed_validset))):
+                ds = MixedERPDataset([tr,v,t], scaler)
+                loader = DataLoader(dataset=ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+                _, separated_accs[1,idx,i], separated_F1[1,idx,i],_ = evaluate(model, loader, ds.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_ds_{idx}', print_output=False, weighted=True)
+                del ds                        
+            del mixed_trainset, mixed_validset, mixed_testset, trs, vs, ts
         del trainset, validset, testset    
         print(f'train_accs: {train_accs}')
         print(f'test_accs: {test_accs}')
@@ -468,18 +449,8 @@ def trainSubjecSpecific(config, jobname):
     else:
         path = os.path.join(data_folder, data_files)
         loaded_data = makeERPdata(path)
-    pkl_filename = os.path.abspath('splits.pkl')        
-    print(f'splits filename: {pkl_filename}')
-    if os.path.exists(pkl_filename):
-        print(f'loading splits file: {pkl_filename}')
-        # loading data:        
-        with open(pkl_filename, 'rb') as f:
-            splits = pickle.load(f)[0]  
-    else:
-        print(f'creating splits file: {pkl_filename}')
-        splits = make_splits(loaded_data, nFold)
-        with open(pkl_filename, 'wb') as f:
-            pickle.dump([splits], f)
+    
+    splits = make_splits(loaded_data, nFold)
     
     for i in range(from_sbj, to_sbj):
         for fold in range(nFold):
@@ -495,38 +466,38 @@ def trainSubjecSpecific(config, jobname):
             else:
                 trainset, validset, testset = get_splited_datasets(fold, loaded_data, splits, dataset_params, [i])
             
-                # dataloader
-                trainLoader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
-                model_path = os.path.join(output_path, f"{model_params['model_name']}_SS_{i}_fold_{fold}.pth")
-                if model_params['pretrained'] is not None:
-                    model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
-                else:
-                    model.pretrained = None                
-                model.initialize()
-                if trainModel:
-                    fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}', print_every=1)
-                # evaluate
-                _,_,_, thrhs[i, fold] = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_valid', print_output=True)
-                train_loss, train_accs[i, fold], train_F1[i, fold], threshold = evaluate(model, trainLoader, trainset.scaler, device, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_train', print_output=True)
-                test_loss, test_accs[i, fold], test_F1[i, fold], threshold = evaluate(model, testLoader, testset.scaler, device, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_test', print_output=True)
-                
-                if type(loaded_data) is list: # single DS evaluation
-                    ds_config = copy.deepcopy(dataset_params)
-                    ds_config['min_seed'] = 1
-                    ds_config['max_seed'] = 1
-                    ds_config['name'] = ['ExperimentalERPDataset']
-                    _, _, mixed_testset1 = get_mixed_splited_datasets(fold, loaded_data, splits, ds_config, [i])
-                    ds_config['name'] = ['ExperimentalERPDataset']
-                    ds_config['upsampling'] = False
-                    _, _, mixed_testset2 = get_mixed_splited_datasets(fold, loaded_data, splits, ds_config, [i])
-                    for ds1, ds2, idx in zip(mixed_testset1, mixed_testset2, range(len(mixed_testset1))):
-                        loader1 = DataLoader(dataset=ds1, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                        loader2 = DataLoader(dataset=ds2, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-                        _, separated_accs[0,idx, i, fold], separated_F1[0,idx,i,fold],_ = evaluate(model, loader1, ds1.scaler, devices, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False)
-                        _, separated_accs[1,idx, i, fold], separated_F1[1,idx,i,fold],_ = evaluate(model, loader2, ds2.scaler, devices, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False, weighted=True)          
-                        del ds1, ds2                      
+            # dataloader
+            trainLoader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+            validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+            testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
+            model_path = os.path.join(output_path, f"{model_params['model_name']}_SS_{i}_fold_{fold}.pth")
+            if model_params['pretrained'] is not None:
+                model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
+            else:
+                model.pretrained = None                
+            model.initialize()
+            if trainModel:
+                fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}', print_every=1)
+            # evaluate
+            _,_,_, thrhs[i, fold] = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_valid', print_output=True)
+            train_loss, train_accs[i, fold], train_F1[i, fold], threshold = evaluate(model, trainLoader, trainset.scaler, device, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_train', print_output=True)
+            test_loss, test_accs[i, fold], test_F1[i, fold], threshold = evaluate(model, testLoader, testset.scaler, device, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_test', print_output=True)
+            
+            if type(loaded_data) is list: # single DS evaluation
+                ds_config = copy.deepcopy(dataset_params)
+                ds_config['min_seed'] = 1
+                ds_config['max_seed'] = 1
+                ds_config['name'] = ['ExperimentalERPDataset']
+                _, _, mixed_testset1 = get_mixed_splited_datasets(fold, loaded_data, splits, ds_config, [i])
+                ds_config['name'] = ['ExperimentalERPDataset']
+                ds_config['upsampling'] = False
+                _, _, mixed_testset2 = get_mixed_splited_datasets(fold, loaded_data, splits, ds_config, [i])
+                for ds1, ds2, idx in zip(mixed_testset1, mixed_testset2, range(len(mixed_testset1))):
+                    loader1 = DataLoader(dataset=ds1, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+                    loader2 = DataLoader(dataset=ds2, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+                    _, separated_accs[0,idx, i, fold], separated_F1[0,idx,i,fold],_ = evaluate(model, loader1, ds1.scaler, devices, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False)
+                    _, separated_accs[1,idx, i, fold], separated_F1[1,idx,i,fold],_ = evaluate(model, loader2, ds2.scaler, devices, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False, weighted=True)          
+                    del ds1, ds2                      
                 
             del trainset, validset, testset
         print(f'train_accs: {np.mean(train_accs, -1, keepdims=False)[i]}')

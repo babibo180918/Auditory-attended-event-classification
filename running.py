@@ -20,17 +20,18 @@ from eventaad.BaseNet import *
 from eventaad.EEGModels import *
 from eventaad.dataset import *
 from eventaad.loss import *
+from eventaad.utils import metrics
 
 
 def make_splits(loaded_data, nFold):
     if type(loaded_data) is list:
         all_splits = []
-        for i in range(len(loaded_data)):
-            X = loaded_data[i]['X']
-            kf = KFold(n_splits=nFold,shuffle=True)
+        for j in range(len(loaded_data)):
+            X = loaded_data[j]['X']
             # splitting data
             splits = []
             for i in range(len(X)):
+                kf = KFold(n_splits=nFold, random_state=i, shuffle=True)
                 split = [(train, test) for train, test in kf.split(X[i])]
                 splits.append(split)
             all_splits.append(splits)
@@ -38,10 +39,10 @@ def make_splits(loaded_data, nFold):
     else:
         X = loaded_data['X']
         y = loaded_data['y']
-        kf = KFold(n_splits=nFold,shuffle=True)
         # splitting data
         splits = []
         for i in range(len(X)):
+            kf = KFold(n_splits=nFold, random_state=i, shuffle=True)
             split = [(train, test) for train, test in kf.split(X[i])]
             splits.append(split)
         return splits
@@ -55,6 +56,7 @@ def get_splited_datasets(fold, loaded_data, splits, dataset_params, sbj_idxs=Non
     test_y = []     
     X = loaded_data['X']
     y = loaded_data['y']
+        
     if sbj_idxs is None:
         sbj_idxs = range(len(X))
     for i in sbj_idxs:
@@ -62,7 +64,7 @@ def get_splited_datasets(fold, loaded_data, splits, dataset_params, sbj_idxs=Non
         test_y.append(y[i][splits[i][fold][1]])
         trainX = X[i][splits[i][fold][0]]
         trainy = y[i][splits[i][fold][0]]
-        trainX, validX, trainy, validy = train_test_split(trainX, trainy, test_size=0.2)# spliting train into train and validation set
+        trainX, validX, trainy, validy = train_test_split(trainX, trainy, random_state=i, test_size=0.2)# spliting train into train and validation set
         train_X.append(trainX)
         train_y.append(trainy) 
         valid_X.append(validX)
