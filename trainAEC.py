@@ -67,15 +67,6 @@ def trainSubjecIndependent(config, jobname):
     lr = optimizer_params['lr']
     lr_decay_step = optimizer_params['lr_decay_step']
     lr_decay_gamma = optimizer_params['lr_decay_gamma']  
-        
-    # model
-    lossClass = loss_params['name']
-    criterion = eval(lossClass)()
-    #
-    model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])
-    optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)
-    erp_criterion = eval(loss_params['erp_loss'])()
     
     train_accs = np.zeros((nFold))
     test_accs = np.zeros((nFold))
@@ -142,19 +133,29 @@ def trainSubjecIndependent(config, jobname):
             validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
             testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
             model_path = os.path.join(output_path, f"{model_params['model_name']}_SI_fold_{fold}.pth")
+
+            # model
+            lossClass = loss_params['name']
+            criterion = eval(lossClass)()
+            erp_criterion = eval(loss_params['erp_loss'])()
+            model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])            
+            
             if model_params['pretrained'] is not None:
                 model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
             else:
                 model.pretrained = None
             model.initialize()
             if trainModel:
+                optimizer = Adam(model.parameters(), lr=lr)
+                scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)
                 if (type(devices) is list) and (len(devices) > 1):
                     fit_data_parallel(model, criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, devices, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}')
                 else:                
                     fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, devices, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}', print_every=1)
+            else:
+                model_path = None            
             # evaluate
-            _,_,_, thrhs[fold] = evaluate(model, validLoader, validset.scaler, devices, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_valid', print_output=False)
-            train_loss, train_accs[fold], train_F1[fold], threshold = evaluate(model, trainLoader, trainset.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_train', print_output=False)
+            train_loss, train_accs[fold], train_F1[fold], thrhs[fold] = evaluate(model, validLoader, validset.scaler, devices, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_valid', print_output=False)
             test_loss, test_accs[fold], test_F1[fold], threshold = evaluate(model, testLoader, testset.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_test', print_output=False)                
             if type(loaded_data) is list: # single DS evaluation
                 ds_config = copy.deepcopy(dataset_params)
@@ -172,6 +173,12 @@ def trainSubjecIndependent(config, jobname):
                     _, separated_accs[1,idx,fold], separated_F1[1,idx,fold],_ = evaluate(model, loader2, ds2.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False, weighted=True)          
                     del ds1, ds2                        
             del trainset, validset, testset, mixed_trainset, mixed_validset, mixed_testset
+            print(f'Fold {fold} results:')
+            print(f'valid_loss: {train_loss}')
+            print(f'test_accs: {test_accs[fold]}')
+            print(f'test_F1: {test_F1[fold]}')
+            print(f'dataset accs: {separated_accs[...,fold]}')
+            print(f'dataset F1: {separated_F1[...,fold]}')
     print(f'train_accs: {train_accs}')
     print(f'test_accs: {test_accs}')
     print(f'train_F1: {train_F1}')
@@ -233,14 +240,6 @@ def trainAndCrossValidate(config, jobname):
     lr = optimizer_params['lr']
     lr_decay_step = optimizer_params['lr_decay_step']
     lr_decay_gamma = optimizer_params['lr_decay_gamma']    
-    # model
-    lossClass = loss_params['name']
-    criterion = eval(lossClass)()
-    #
-    model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])
-    optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)
-    erp_criterion = eval(loss_params['erp_loss'])()
     
     train_accs = np.zeros(NUM_SBJS)
     test_accs = np.zeros(NUM_SBJS)
@@ -311,16 +310,24 @@ def trainAndCrossValidate(config, jobname):
         validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
         testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
         model_path = os.path.join(output_path, f"{model_params['model_name']}_CS_{i}.pth")
+        # model
+        lossClass = loss_params['name']
+        criterion = eval(lossClass)()
+        erp_criterion = eval(loss_params['erp_loss'])()
+        model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])       
         if model_params['pretrained'] is not None:
             model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
         else:
             model.pretrained = None                
         model.initialize()
         if trainModel:
+            optimizer = Adam(model.parameters(), lr=lr)
+            scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)             
             fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_CS_{i}', print_every=1)
+        else:
+            model_path = None
         # evaluate
-        _,_,_, thrhs[i] = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_CS_{i}_valid', print_output=False)
-        train_loss, train_accs[i], train_F1[i], threshold = evaluate(model, trainLoader, trainset.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_train', print_output=False)
+        train_loss, train_accs[i], train_F1[i], thrhs[i] = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_CS_{i}_valid', print_output=False)
         test_loss, test_accs[i], test_F1[i], threshold = evaluate(model, testLoader, testset.scaler, device, criterion, sr, threshold=thrhs[i], model_path=model_path, jobname=f'{jobname}_CS_{i}_test', print_output=False)
         if type(loaded_data) is list: # single DS evaluation
             ds_config = copy.deepcopy(dataset_params)
@@ -403,14 +410,7 @@ def trainSubjecSpecific(config, jobname):
     device = devices[0] if (type(devices) is list) else devices    
     lr = optimizer_params['lr']
     lr_decay_step = optimizer_params['lr_decay_step']
-    lr_decay_gamma = optimizer_params['lr_decay_gamma']    
-    # model
-    lossClass = loss_params['name']
-    criterion = eval(lossClass)()
-    model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])
-    optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma) 
-    erp_criterion = eval(loss_params['erp_loss'])()
+    lr_decay_gamma = optimizer_params['lr_decay_gamma']     
     
     train_accs = np.zeros((NUM_SBJS, nFold))
     test_accs = np.zeros((NUM_SBJS, nFold))
@@ -471,16 +471,25 @@ def trainSubjecSpecific(config, jobname):
             validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
             testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
             model_path = os.path.join(output_path, f"{model_params['model_name']}_SS_{i}_fold_{fold}.pth")
+            # model
+            lossClass = loss_params['name']
+            criterion = eval(lossClass)()
+            erp_criterion = eval(loss_params['erp_loss'])()
+            model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])
+           
             if model_params['pretrained'] is not None:
                 model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
             else:
                 model.pretrained = None                
             model.initialize()
             if trainModel:
+                optimizer = Adam(model.parameters(), lr=lr)
+                scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)             
                 fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}', print_every=1)
+            else:
+                model_path = None
             # evaluate
-            _,_,_, thrhs[i, fold] = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_valid', print_output=True)
-            train_loss, train_accs[i, fold], train_F1[i, fold], threshold = evaluate(model, trainLoader, trainset.scaler, device, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_train', print_output=True)
+            train_loss, train_accs[i, fold], train_F1[i, fold], thrhs[i, fold] = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_valid', print_output=True)
             test_loss, test_accs[i, fold], test_F1[i, fold], threshold = evaluate(model, testLoader, testset.scaler, device, criterion, sr, threshold=thrhs[i, fold], model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}_test', print_output=True)
             
             if type(loaded_data) is list: # single DS evaluation

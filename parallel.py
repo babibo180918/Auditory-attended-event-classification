@@ -182,16 +182,7 @@ def fold_job(rank, world_size, devices, folds, loaded_data, scaler, splits, conf
     lr = optimizer_params['lr']
     lr_decay_step = optimizer_params['lr_decay_step']
     lr_decay_gamma = optimizer_params['lr_decay_gamma']  
-        
-    # model
-    if model_params['model_name'] not in ['CSP', 'TM', 'LDA']:
-        lossClass = loss_params['name']
-        criterion = eval(lossClass)()
-        #
-        model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])
-        optimizer = Adam(model.parameters(), lr=lr)
-        scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)
-        erp_criterion = eval(loss_params['erp_loss'])()    
+               
     #
     print(f'********** training - Fold {fold} **********')
     mixed_trainset = None
@@ -213,16 +204,26 @@ def fold_job(rank, world_size, devices, folds, loaded_data, scaler, splits, conf
     validLoader = DataLoader(dataset=validset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     testLoader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)       
     model_path = os.path.join(output_path, f"{model_params['model_name']}_SI_fold_{fold}.pth")
+    # model
+    if model_params['model_name'] not in ['CSP', 'TM', 'LDA']:
+        lossClass = loss_params['name']
+        criterion = eval(lossClass)()
+        erp_criterion = eval(loss_params['erp_loss'])()    
+        #
+        model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])    
     if model_params['pretrained'] is not None:
         model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
     else:
         model.pretrained = None
     model.initialize()
     if trainModel:
+        optimizer = Adam(model.parameters(), lr=lr)
+        scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)     
         fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}', print_every=1)
+    else:
+        model_path = None
     # evaluate
-    _,_,_, thrhs = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_valid', print_output=False)
-    train_loss, train_accs, train_F1, threshold = evaluate(model, trainLoader, trainset.scaler, device, criterion, sr, threshold=thrhs, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_train', print_output=False)
+    train_loss, train_accs, train_F1, thrhs = evaluate(model, validLoader, validset.scaler, device, criterion, sr, threshold=None, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_valid', print_output=False)
     test_loss, test_accs, test_F1, threshold = evaluate(model, testLoader, testset.scaler, device, criterion, sr, threshold=thrhs, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}_test', print_output=False)
     # test on original dataset
     separated_accs = np.zeros((2, 12))
