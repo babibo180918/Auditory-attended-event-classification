@@ -64,9 +64,11 @@ def trainSubjecIndependent(config, jobname):
     
     print_every = running_params['print_every']
     devices = running_params['device']    
+    opt = optimizer_params['opt']
     lr = optimizer_params['lr']
     lr_decay_step = optimizer_params['lr_decay_step']
-    lr_decay_gamma = optimizer_params['lr_decay_gamma']  
+    lr_decay_gamma = optimizer_params['lr_decay_gamma']
+    weight_decay = optimizer_params['weight_decay']  
     
     train_accs = np.zeros((nFold))
     test_accs = np.zeros((nFold))
@@ -146,7 +148,7 @@ def trainSubjecIndependent(config, jobname):
                 model.pretrained = None
             model.initialize()
             if trainModel:
-                optimizer = Adam(model.parameters(), lr=lr)
+                optimizer = eval(opt)(model.parameters(), lr=lr, weight_decay=weight_decay)
                 scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)
                 if (type(devices) is list) and (len(devices) > 1):
                     fit_data_parallel(model, criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, devices, model_path=model_path, jobname=f'{jobname}_SI_fold_{fold}')
@@ -236,10 +238,12 @@ def trainAndCrossValidate(config, jobname):
     
     print_every = running_params['print_every']
     devices = running_params['device']
-    device = devices[0] if (type(devices) is list) else devices
+    device = devices[0] if (type(devices) is list) else devices  
+    opt = optimizer_params['opt']
     lr = optimizer_params['lr']
     lr_decay_step = optimizer_params['lr_decay_step']
-    lr_decay_gamma = optimizer_params['lr_decay_gamma']    
+    lr_decay_gamma = optimizer_params['lr_decay_gamma']
+    weight_decay = optimizer_params['weight_decay']    
     
     train_accs = np.zeros(NUM_SBJS)
     test_accs = np.zeros(NUM_SBJS)
@@ -321,8 +325,8 @@ def trainAndCrossValidate(config, jobname):
             model.pretrained = None                
         model.initialize()
         if trainModel:
-            optimizer = Adam(model.parameters(), lr=lr)
-            scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)             
+            optimizer = eval(opt)(model.parameters(), lr=lr, weight_decay=weight_decay)
+            scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)            
             fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_CS_{i}', print_every=1)
         else:
             model_path = None
@@ -408,9 +412,11 @@ def trainSubjecSpecific(config, jobname):
     print_every = running_params['print_every']
     devices = running_params['device'] 
     device = devices[0] if (type(devices) is list) else devices    
+    opt = optimizer_params['opt']
     lr = optimizer_params['lr']
     lr_decay_step = optimizer_params['lr_decay_step']
-    lr_decay_gamma = optimizer_params['lr_decay_gamma']     
+    lr_decay_gamma = optimizer_params['lr_decay_gamma']
+    weight_decay = optimizer_params['weight_decay']     
     
     train_accs = np.zeros((NUM_SBJS, nFold))
     test_accs = np.zeros((NUM_SBJS, nFold))
@@ -483,8 +489,8 @@ def trainSubjecSpecific(config, jobname):
                 model.pretrained = None                
             model.initialize()
             if trainModel:
-                optimizer = Adam(model.parameters(), lr=lr)
-                scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)             
+                optimizer = eval(opt)(model.parameters(), lr=lr, weight_decay=weight_decay)
+                scheduler = StepLR(optimizer, step_size=lr_decay_step, gamma=lr_decay_gamma)            
                 fit(model, criterion, erp_criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, device, model_path=model_path, jobname=f'{jobname}_SS_{i}_fold_{fold}', print_every=1)
             else:
                 model_path = None
