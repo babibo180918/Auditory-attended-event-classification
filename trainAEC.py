@@ -289,11 +289,35 @@ def trainAndCrossValidate(config, jobname):
         print(f'********** training - cross subject {i} **********')
         train_idxs = []
         test_idxs = []
+        # LTSO
+        # for j in range(NUM_SBJS):
+            # if (i%NUM_SBJS)!=j and ((i+1)%NUM_SBJS)!=j:
+                # train_idxs.append(j)
+            # else:
+                # test_idxs.append(j)
+        # if type(loaded_data) is list:
+            # trs, vs, ts = get_mixed_splited_datasets(0, loaded_data, splits, copy.deepcopy(dataset_params), train_idxs)
+            # trainset = MixedERPDataset(trs, scaler)
+            # validset = MixedERPDataset(vs+ts, scaler)
+            # trs, vs, ts = get_mixed_splited_datasets(0, loaded_data, splits, copy.deepcopy(dataset_params), test_idxs)
+            # testset = MixedERPDataset(trs+vs+ts, scaler)
+            # print(f'mixed trainset: {len(trainset)}')
+            # print(f'mixed validset: {len(validset)}')
+            # print(f'mixed testset: {len(testset)}')
+        # else:
+            # trainset, vs, ts = get_splited_datasets(0, loaded_data, splits, dataset_params, train_idxs)
+            # validset = MixedERPDataset([vs,ts], scaler)
+            # trs, vs, ts = get_splited_datasets(0, loaded_data, splits, dataset_params, test_idxs)
+            # testset = MixedERPDataset([trs,vs,ts], scaler)
+            
+        # LTSO
         for j in range(NUM_SBJS):
-            if (i%NUM_SBJS)!=j and ((i+1)%NUM_SBJS)!=j:
+            if j!=i:
                 train_idxs.append(j)
             else:
                 test_idxs.append(j)
+        print(f'train subjects: {train_idxs}')
+        print(f'test subject: {test_idxs}')
         if type(loaded_data) is list:
             trs, vs, ts = get_mixed_splited_datasets(0, loaded_data, splits, copy.deepcopy(dataset_params), train_idxs)
             trainset = MixedERPDataset(trs, scaler)
@@ -307,7 +331,7 @@ def trainAndCrossValidate(config, jobname):
             trainset, vs, ts = get_splited_datasets(0, loaded_data, splits, dataset_params, train_idxs)
             validset = MixedERPDataset([vs,ts], scaler)
             trs, vs, ts = get_splited_datasets(0, loaded_data, splits, dataset_params, test_idxs)
-            testset = MixedERPDataset([trs,vs,ts], scaler)
+            testset = MixedERPDataset([trs,vs,ts], scaler)            
         
         # dataloader
         trainLoader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
@@ -581,9 +605,9 @@ if __name__ == '__main__':
         
         all_SI_train_accs[i], all_SI_test_accs[i], all_SI_ds_accs[i], all_SI_train_F1[i], all_SI_test_F1[i], all_SI_ds_F1[i] = trainSubjecIndependent(configs[i], jobname)
         
-        # all_CS_train_accs[i], all_CS_test_accs[i], all_CS_ds_accs[i], all_CS_train_F1[i], all_CS_test_F1[i], all_CS_ds_F1[i] = trainAndCrossValidate(configs[i], jobname)
+        all_CS_train_accs[i], all_CS_test_accs[i], all_CS_ds_accs[i], all_CS_train_F1[i], all_CS_test_F1[i], all_CS_ds_F1[i] = trainAndCrossValidate(configs[i], jobname)
         
-        # all_SS_train_accs[i], all_SS_test_accs[i], all_SS_ds_accs[i], all_SS_train_F1[i], all_SS_test_F1[i], all_SS_ds_F1[i] = trainSubjecSpecific(configs[i], jobname)
+        all_SS_train_accs[i], all_SS_test_accs[i], all_SS_ds_accs[i], all_SS_train_F1[i], all_SS_test_F1[i], all_SS_ds_F1[i] = trainSubjecSpecific(configs[i], jobname)
         
     all_SI_train_accs = np.array(all_SI_train_accs).round(3)
     all_SI_test_accs = np.array(all_SI_test_accs).round(3)
@@ -608,7 +632,7 @@ if __name__ == '__main__':
     all_SS_ds_F1 = np.array(all_SS_ds_F1).round(3)    
 
     all_SI_accs = np.concatenate([np.expand_dims(all_SI_test_accs, axis=1), all_SI_ds_accs[:,0,0:3,:]], axis=1)
-    # all_CS_accs = np.concatenate([np.expand_dims(all_CS_test_accs, axis=1), all_CS_ds_accs[:,0,0:3,:]], axis=1)
+    all_CS_accs = np.concatenate([np.expand_dims(all_CS_test_accs, axis=1), all_CS_ds_accs[:,0,0:3,:]], axis=1)
     # all_SS_accs = np.concatenate([np.expand_dims(all_SS_test_accs, axis=1), all_SS_ds_accs[:,0,0:3,:]], axis=1)
     
     y_label = 'Accuracy'
@@ -618,9 +642,9 @@ if __name__ == '__main__':
     save_path = os.path.join(output_path, "fig3_SI_performance.png")
     plot_compare_bar_withSTDbar(all_SI_accs, bar_labels=model_names, xtick_labels=xtick_labels, y_label=y_label, title=title, save_path=save_path)
 
-    # title = 'Leave-two-subjects-out classification performance'
-    # save_path = os.path.join(output_path, "fig4_CS_performance.png")
-    # plot_compare_bar_withSTDbar(all_CS_accs, bar_labels=model_names, xtick_labels=xtick_labels, y_label=y_label, title=title, save_path=save_path)
+    title = 'Leave-one-subjects-out classification performance'
+    save_path = os.path.join(output_path, "fig4_CS_performance.png")
+    plot_compare_bar_withSTDbar(all_CS_accs, bar_labels=model_names, xtick_labels=xtick_labels, y_label=y_label, title=title, save_path=save_path)
     
     # title = 'Individual classification performance'
     # save_path = os.path.join(output_path, "fig5_SS_performance.png")
