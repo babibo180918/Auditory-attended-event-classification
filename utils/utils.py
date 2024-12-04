@@ -4,6 +4,7 @@ import glob
 import matplotlib.pyplot as plt
 import torchaudio.transforms as T
 import torch
+from torchsummary import summary
 import librosa
 import random
 
@@ -15,7 +16,7 @@ import seaborn as sn
 from sklearn.metrics import confusion_matrix
 
 plt.rcParams["font.family"] = "Times New Roman"
-colors = ['tab:red', 'tab:blue', 'tab:green', 'tab:orange', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:cyan']
+colors = ['tab:red', 'tab:blue', 'tab:green', 'tab:gray', 'tab:orange', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:cyan']
 markers = ['o', '^', '*', 's', 'x', 'p']
 titlefontsizebig = 22
 labelfontsizebig = 22
@@ -187,13 +188,14 @@ def plot_compare_bar(compare_data, bar_labels, xtick_labels, y_label=None, title
 def plot_compare_bar_withSTDbar(compare_data, bar_labels, xtick_labels, y_label=None, title=None, save_path=None):
     nBars = len(compare_data)
     width = 0.2
+    plt.figure()
     plt.clf()
     ticks = np.arange(len(xtick_labels))  # the label locations
     plt.xticks(ticks=ticks, labels=xtick_labels, fontsize=tickfontsize)
     # plt.yticks(ticks=[0.5, 0.6, 0.7, 0.8, 0.9, 1], fontsize=tickfontsize)
     plt.yticks(ticks=[0.5, 0.6, 0.7, 0.8, 0.9, 1], labels=['${}^*$0.5', 0.6, 0.7, 0.8, 0.9, 1], fontsize=tickfontsize)
     plt.ylim(0.5, 1)    
-    plt.grid(axis = 'y', linestyle='--', linewidth=1.0, zorder=0)
+    plt.grid(axis = 'y', linestyle='--', linewidth=0.5, zorder=0)
     for i in range(nBars):
         (nXticks, obvs) = compare_data[i].shape
         mean = np.mean(compare_data[i], 1, keepdims=False)
@@ -208,11 +210,13 @@ def plot_compare_bar_withSTDbar(compare_data, bar_labels, xtick_labels, y_label=
         plt.ylabel(y_label, fontsize=labelfontsize)
     if title is not None:
         plt.title(title, fontsize=titlefontsize)
-    plt.legend(fontsize=legendfontsize)
+    # plt.legend(fontsize=legendfontsize)
+    plt.legend(fontsize=10, ncol=5, columnspacing=1.0)
     fig = plt.gcf()
     fig.set_size_inches(8, 2.5)  
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    return fig
 
 def plot_compare_line(compare_data, bar_labels=None, xtick_labels=None, y_label=None, title=None, save_path=None):
     (nBars, nTicks) = compare_data.shape
@@ -343,12 +347,9 @@ def plot_accuracy(valid_accs, test_accs, filename):
     fig.tight_layout()    
     plt.savefig(filename, dpi=300, bbox_inches='tight')
 
-def visualize(model, X, filename):
+def model_summary(model):
     print(model)
-    #summary(model,input_size=X.shape)
-    model.to(X.device)
-    g = make_dot(model(X).mean(), params=dict(model.named_parameters()))
-    #g.render(filename, format="pdf", view=True, cleanup=True, quiet=True)
+    summary(model, input_size=())
     
 def permutation_test(x1, x2, n_iters:int=1000, tail=0, plot_hist=False) -> np.ndarray:
     """ Perform permutation test of 2 random variables

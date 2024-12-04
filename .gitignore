@@ -122,7 +122,8 @@ dmypy.json
 
 
 [Tt]est.*
-image/*
 output/*
 data/*.*
-splits.pkl
+scripts
+config
+!config/config_AECNet1.yml

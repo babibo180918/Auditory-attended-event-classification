@@ -14,7 +14,8 @@ from eventaad.EEGModels import *
 from eventaad.dataset import *
 import eventaad.loss as L
 from eventaad.loss import *
-from parallel import *
+from utils.parallel import *
+from utils.utils import *
 
 global NUM_SBJS
 NUM_SBJS = 24
@@ -288,29 +289,8 @@ def trainAndCrossValidate(config, jobname):
     for i in range(from_sbj, to_sbj):            
         print(f'********** training - cross subject {i} **********')
         train_idxs = []
-        test_idxs = []
-        # LTSO
-        # for j in range(NUM_SBJS):
-            # if (i%NUM_SBJS)!=j and ((i+1)%NUM_SBJS)!=j:
-                # train_idxs.append(j)
-            # else:
-                # test_idxs.append(j)
-        # if type(loaded_data) is list:
-            # trs, vs, ts = get_mixed_splited_datasets(0, loaded_data, splits, copy.deepcopy(dataset_params), train_idxs)
-            # trainset = MixedERPDataset(trs, scaler)
-            # validset = MixedERPDataset(vs+ts, scaler)
-            # trs, vs, ts = get_mixed_splited_datasets(0, loaded_data, splits, copy.deepcopy(dataset_params), test_idxs)
-            # testset = MixedERPDataset(trs+vs+ts, scaler)
-            # print(f'mixed trainset: {len(trainset)}')
-            # print(f'mixed validset: {len(validset)}')
-            # print(f'mixed testset: {len(testset)}')
-        # else:
-            # trainset, vs, ts = get_splited_datasets(0, loaded_data, splits, dataset_params, train_idxs)
-            # validset = MixedERPDataset([vs,ts], scaler)
-            # trs, vs, ts = get_splited_datasets(0, loaded_data, splits, dataset_params, test_idxs)
-            # testset = MixedERPDataset([trs,vs,ts], scaler)
-            
-        # LTSO
+        test_idxs = []            
+        # LOSO
         for j in range(NUM_SBJS):
             if j!=i:
                 train_idxs.append(j)
@@ -342,7 +322,8 @@ def trainAndCrossValidate(config, jobname):
         lossClass = loss_params['name']
         criterion = eval(lossClass)()
         erp_criterion = eval(loss_params['erp_loss'])()
-        model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])       
+        model = eval(model_params['model_name'])(model_params, sr, start, end, channels, channels_erp, model_params['erp_forcing'], model_params['hybrid_training'])
+        summary(model)
         if model_params['pretrained'] is not None:
             model.pretrained = os.path.join(os.path.abspath(model_params['pretrained']), os.path.basename(model_path))
         else:

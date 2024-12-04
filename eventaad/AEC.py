@@ -15,7 +15,7 @@ import joblib
 from .BaseNet import *
 from .EEGModels import *
 from .convLSTM import ConvLSTM
-from .utils import *
+from utils.utils import *
 
 class LinearClassifier(nn.Module):
     def __init__(self, config:dict):

@@ -20,7 +20,7 @@ from eventaad.BaseNet import *
 from eventaad.EEGModels import *
 from eventaad.dataset import *
 from eventaad.loss import *
-from eventaad.utils import metrics, binary_accuracy
+from .utils import metrics, binary_accuracy
 
 
 def make_splits(loaded_data, nFold):

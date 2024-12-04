@@ -10,9 +10,9 @@ import torch.multiprocessing as mp
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 from eventaad.AEC import *
-from eventaad.utils import *
+from .utils import *
 from eventaad.loss import *
-from running import *
+from .running import *
 
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
