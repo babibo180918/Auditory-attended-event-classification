@@ -7,6 +7,7 @@ import torch
 from torchsummary import summary
 import librosa
 import random
+import logging
 
 from sklearn.manifold import TSNE
 from string import ascii_uppercase
@@ -46,7 +47,7 @@ def getFileList(in_path):
         for filename in glob.glob(in_path + '/**/*.*', recursive=True):
             filepaths.append(filename)
     else:
-        print("Path is invalid: " + in_path)
+        logging.getLogger().info("Path is invalid: " + in_path)
         return None
 
     return filepaths
@@ -54,7 +55,7 @@ def getFileList(in_path):
 def addToHDF5(filepath, *args):
     numOfArgs = len(args)
     if numOfArgs%2 != 0:
-        print("Number of arguments are incorrect.")
+        logging.getLogger().info("Number of arguments are incorrect.")
         return
     
 def plot_spectrogram(x, n_fft:int, hop_length:int, Fs:float, save_file=None):
@@ -95,7 +96,7 @@ def plot_confusion_matrix(y_true, y_predict, labels, filename, normalize='all'):
     columns = labels
     confm = confusion_matrix(y_true, y_predict, normalize=normalize)
     if confm.shape == (1,1):
-        print(confm)
+        logging.getLogger().info(confm)
         return
     df_cm = DataFrame(confm, index=columns, columns=columns)
     plt.clf()
@@ -110,10 +111,10 @@ def print_memory_info(device):
     r = torch.cuda.memory_reserved(device)
     a = torch.cuda.memory_allocated(device)
     f = r-a  # free inside reserved
-    print(f'total memory: {t/1024/1024/1024}')
-    print(f'reserved memory: {r/1024/1024/1024}')
-    print(f'allocated memory: {a/1024/1024/1024}')
-    print(f'free memory: {f/1024/1024/1024}')
+    logging.getLogger().info(f'total memory: {t/1024/1024/1024}')
+    logging.getLogger().info(f'reserved memory: {r/1024/1024/1024}')
+    logging.getLogger().info(f'allocated memory: {a/1024/1024/1024}')
+    logging.getLogger().info(f'free memory: {f/1024/1024/1024}')
 
 def binary_accuracy(y_hat, y_true, thresh=0.5):
     y_pred = y_hat>thresh
@@ -203,8 +204,8 @@ def plot_compare_bar_withSTDbar(compare_data, bar_labels, xtick_labels, y_label=
         loc = np.arange(nXticks) - (nBars-1)*width/2 + i*width
         rects = plt.bar(loc, mean, width, label=bar_labels[i], color=colors[i], zorder=3)
         plt.errorbar(loc, mean, std, capsize=3, linestyle='none', color='k', zorder=3)
-        print(f'mean: {mean}')
-        print(f'std: {std}')
+        logging.getLogger().info(f'mean: {mean}')
+        logging.getLogger().info(f'std: {std}')
     #    
     if y_label is not None:
         plt.ylabel(y_label, fontsize=labelfontsize)
@@ -348,7 +349,7 @@ def plot_accuracy(valid_accs, test_accs, filename):
     plt.savefig(filename, dpi=300, bbox_inches='tight')
 
 def model_summary(model):
-    print(model)
+    logging.getLogger().info(model)
     summary(model, input_size=())
     
 def permutation_test(x1, x2, n_iters:int=1000, tail=0, plot_hist=False) -> np.ndarray:

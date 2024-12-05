@@ -21,6 +21,8 @@ from eventaad.EEGModels import *
 from eventaad.dataset import *
 from eventaad.loss import *
 from .utils import metrics, binary_accuracy
+from . import logging
+logger = logging.getLogger()
 
 
 def make_splits(loaded_data, nFold):
@@ -97,7 +99,7 @@ def get_mixed_splited_datasets(fold, loaded_data, splits, dataset_params, sbj_id
             if ds_type == 'SimulatedERPDataset':
                 dataset_params['simulated'] = True
                 for db in SNRs:
-                    print(f'generating mixed dataset {ds_type}, {db} dB')
+                    logger.info(f'generating mixed dataset {ds_type}, {db} dB')
                     dataset_params['SNR'] = db
                     train, valid, test = get_splited_datasets(fold, loaded_data[i], splits[i], dataset_params, sbj_idxs)
                     trainset.append(train)
@@ -105,7 +107,7 @@ def get_mixed_splited_datasets(fold, loaded_data, splits, dataset_params, sbj_id
                     testset.append(test)
                     del train, valid, test
             else:
-                print(f'generating mixed dataset {ds_type}')
+                logger.info(f'generating mixed dataset {ds_type}')
                 dataset_params['simulated'] = False
                 train, valid, test = get_splited_datasets(fold, loaded_data[i], splits[i], dataset_params, sbj_idxs)
                 trainset.append(train)
@@ -195,7 +197,7 @@ def fit(model:BaseNet, criterion, erp_criterion, optimizer, lr_scheduler, train_
     best_erp_loss_valid = -1.0
  
     best_loss_valid, best_accr_valid,_,_ = evaluate(model, valid_loader, None, device, criterion, None, threshold, None, jobname=jobname, print_output=False)
-    print(f'device {device} {datetime.now().time().replace(microsecond=0)} --- '
+    logger.info(f'device {device} {datetime.now().time().replace(microsecond=0)} --- '
           f'Epoch: -1\t'
           f'Valid loss: {best_loss_valid:.8f}\t'
           f'Valid accuracy: {100 * best_accr_valid:.2f}')
@@ -281,7 +283,7 @@ def fit(model:BaseNet, criterion, erp_criterion, optimizer, lr_scheduler, train_
         valid_accs.append(epoch_acc)
 
         if (valid_losses[-1] <= best_loss_valid):
-            print(f'device {device} Checkpoint saved at epoch {epoch}.')
+            logger.info(f'device {device} Checkpoint saved at epoch {epoch}.')
             best_loss_train = train_losses[-1]
             best_loss_valid = valid_losses[-1]
             best_accr_train = train_accs[-1]
@@ -289,7 +291,7 @@ def fit(model:BaseNet, criterion, erp_criterion, optimizer, lr_scheduler, train_
             torch.save(model.state_dict(), model_path)
             
         if (valid_erp_losses[-1] <= best_erp_loss_valid) or best_erp_loss_train<0:
-            print(f'device {device} Feature extractor saved at epoch {epoch}.')
+            logger.info(f'device {device} Feature extractor saved at epoch {epoch}.')
             best_erp_loss_train = train_erp_losses[-1]
             best_erp_loss_valid = valid_erp_losses[-1]
             head_tail = os.path.split(model_path)
@@ -298,7 +300,7 @@ def fit(model:BaseNet, criterion, erp_criterion, optimizer, lr_scheduler, train_
             torch.save(model.feature_extractor.state_dict(), path)            
     
         if epoch % print_every == 0:
-            print(f'device {device} {datetime.now().time().replace(microsecond=0)} --- '
+            logger.info(f'device {device} {datetime.now().time().replace(microsecond=0)} --- '
                   f'Epoch: {epoch}\t'
                   f'Train loss: {train_losses[epoch]:.8f}\t'
                   f'Valid loss: {valid_losses[epoch]:.8f}\t'
@@ -306,7 +308,7 @@ def fit(model:BaseNet, criterion, erp_criterion, optimizer, lr_scheduler, train_
                   f'Valid erp loss: {valid_erp_losses[epoch]:.8f}\t'                  
                   f'Train accuracy: {100 * train_accs[epoch]:.2f}\t'
                   f'Valid accuracy: {100 * valid_accs[epoch]:.2f}') 
-            print(f'device {device}\t\t\t TP: {TP} \t FP: {FP} \t TN: {TN} \t FN: {FN} --- F1: {2*TP/(2*TP+FP+FN):.5f}')              
+            logger.info(f'device {device}\t\t\t TP: {TP} \t FP: {FP} \t TN: {TN} \t FN: {FN} --- F1: {2*TP/(2*TP+FP+FN):.5f}')              
         torch.cuda.empty_cache()
 
     plt.clf()

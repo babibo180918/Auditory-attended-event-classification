@@ -13,6 +13,8 @@ from eventaad.AEC import *
 from .utils import *
 from eventaad.loss import *
 from .running import *
+from . import logging
+logger = logging.getLogger()
 
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -32,7 +34,7 @@ def data_job(rank, world_size, model, criterion, optimizer, scheduler, trainLoad
     device = devices[rank]
     if device != 'cpu':
         torch.cuda.set_device(device)
-    print(f'Running on device: {device}')
+    logger.info(f'Running on device: {device}')
     # setup the process groups
     setup(rank, world_size)
     # prepare the dataloader    
@@ -47,9 +49,9 @@ def data_job(rank, world_size, model, criterion, optimizer, scheduler, trainLoad
     best_loss_valid = -1.0
     best_accr_train = 0.0
     best_accr_valid = 0.0
-    print(f'Started process: {rank}, world_size: {world_size}, train data: {len(trainLoader)*trainLoader.batch_size}, valid data: {len(validLoader.dataset)}')
+    logger.info(f'Started process: {rank}, world_size: {world_size}, train data: {len(trainLoader)*trainLoader.batch_size}, valid data: {len(validLoader.dataset)}')
     epoch_loss, epoch_acc,_,_ = evaluate(model, validLoader, None, device, criterion, None, threshold, None, jobname, print_output=False)
-    print(f'{datetime.now().time().replace(microsecond=0)} --- device {device}:'
+    logger.info(f'{datetime.now().time().replace(microsecond=0)} --- device {device}:'
           f'Epoch: -1\t'
           f'Valid loss: {epoch_loss:.8f}\t'
           f'Valid accuracy: {100 * epoch_acc:.2f}')     
@@ -96,20 +98,20 @@ def data_job(rank, world_size, model, criterion, optimizer, scheduler, trainLoad
         valid_accs.append(epoch_acc)
         torch.cuda.empty_cache()
         if (valid_losses[-1] <= best_loss_valid) or best_loss_train<0:
-            print(f'device {device}: Checkpoint saved at epoch {epoch}.')
+            logger.info(f'device {device}: Checkpoint saved at epoch {epoch}.')
             best_loss_train = train_losses[-1]
             best_loss_valid = valid_losses[-1]
             best_accr_train = train_accs[-1]
             best_accr_valid = valid_accs[-1]
             torch.save(model.module.state_dict(), model_path)
         if epoch % 1 == 0:
-            print(f'{datetime.now().time().replace(microsecond=0)} --- device {device} '
+            logger.info(f'{datetime.now().time().replace(microsecond=0)} --- device {device} '
                   f'Epoch: {epoch}\t'
                   f'Train loss: {train_losses[epoch]:.8f}\t'
                   f'Valid loss: {valid_losses[epoch]:.8f}\t'
                   f'Train accuracy: {100 * train_accs[epoch]:.2f}\t'
                   f'Valid accuracy: {100 * valid_accs[epoch]:.2f}') 
-            print(f'\t\t\t TP: {TP} \t FP: {FP} \t TN: {TN} \t FN: {FN} --- F1: {2*TP/(2*TP+FP+FN):.5f}')     
+            logger.info(f'\t\t\t TP: {TP} \t FP: {FP} \t TN: {TN} \t FN: {FN} --- F1: {2*TP/(2*TP+FP+FN):.5f}')     
     plt.clf()
     plt.plot(train_accs,'b-', label="train accuracy")
     plt.plot(valid_accs,'r.', label="validation accuracy")
@@ -135,7 +137,7 @@ def data_job(rank, world_size, model, criterion, optimizer, scheduler, trainLoad
 def fold_job(rank, world_size, devices, folds, loaded_data, scaler, splits, config, jobname, conn):
     fold = folds[rank]
     device = devices[rank]
-    print(f'Running on device: {device}')
+    logger.info(f'Running on device: {device}')
     # setup the process groups
     setup(rank, world_size)
     if device != 'cpu':
@@ -184,7 +186,7 @@ def fold_job(rank, world_size, devices, folds, loaded_data, scaler, splits, conf
     lr_decay_gamma = optimizer_params['lr_decay_gamma']  
                
     #
-    print(f'********** training - Fold {fold} **********')
+    logger.info(f'********** training - Fold {fold} **********')
     mixed_trainset = None
     mixed_validset = None
     mixed_testset = None
@@ -193,9 +195,9 @@ def fold_job(rank, world_size, devices, folds, loaded_data, scaler, splits, conf
         trainset = MixedERPDataset(trainset, scaler)
         validset = MixedERPDataset(validset, scaler)
         testset = MixedERPDataset(testset, scaler)
-        print(f'mixed trainset: {len(trainset)}')
-        print(f'mixed validset: {len(validset)}')
-        print(f'mixed testset: {len(testset)}')
+        logger.info(f'mixed trainset: {len(trainset)}')
+        logger.info(f'mixed validset: {len(validset)}')
+        logger.info(f'mixed testset: {len(testset)}')
     else:
         trainset, validset, testset = get_splited_datasets(fold, loaded_data, splits, dataset_params)
 
@@ -256,7 +258,7 @@ def fold_job(rank, world_size, devices, folds, loaded_data, scaler, splits, conf
         'separated_accs': separated_accs,
         'separated_F1': separated_F1
     }
-    print(f'sending {data}')
+    logger.info(f'sending {data}')
     conn.send(data)
     cleanup()
     
@@ -269,7 +271,7 @@ def fit_data_parallel(model, criterion, optimizer, scheduler, trainLoader, valid
         args=(world_size, model, criterion, optimizer, scheduler, trainLoader, validLoader, epochs, threshold, devices, model_path, jobname),
         nprocs=world_size
     )    
-    print('All child process finished!', flush=True)
+    logger.info('All child process finished!', flush=True)
     
 def fold_parallel(devices, folds, loaded_data, scaler, splits, config, jobname):
     n_devices = len(devices)
@@ -290,7 +292,7 @@ def fold_parallel(devices, folds, loaded_data, scaler, splits, config, jobname):
             args=(world_size, devices, folds[i*n_devices:(i+1)*n_devices], loaded_data, scaler, splits, config, jobname, child_conn),
             nprocs=world_size
         )
-        print('All child process finished!', flush=True)
+        logger.info('All child process finished!', flush=True)
         while parent_conn.poll():
             result = parent_conn.recv()
             fold = result['fold']

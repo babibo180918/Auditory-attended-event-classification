@@ -12,6 +12,8 @@ import math
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
 import torchaudio.transforms as T
+from utils import logging
+logger = logging.getLogger()
 from .ERPDataset import ERPDataset
 
 MIN_LATENCY = 0.2
@@ -77,7 +79,7 @@ def sampling(X, y, n, min_seed, max_seed):
     return (np.concatenate(new_X, axis=0), np.concatenate(new_y, axis=0))
 
 def makeERPdata(ds_path):
-    print(f'loading raw dataset {ds_path}')
+    logger.info(f'loading raw dataset {ds_path}')
     loaded_data = dict(np.load(ds_path, allow_pickle=True))    
     X_raw = list(loaded_data['X'])
     y_raw = list(loaded_data['y'])
@@ -145,7 +147,7 @@ class ExperimentalERPDataset(ERPDataset):
             ERP_shape = ERP.shape
             ERP = scaler.transform(ERP.reshape(-1, 1)).reshape(ERP_shape)        
         super().__init__(self.n_sbjs, X, y, ERP, channels_in, channels_erp, config['ERP_types'], sr, scaler)
-        print(f'self.epoch_nums: {self.epoch_nums}')     
+        logger.info(f'self.epoch_nums: {self.epoch_nums}')     
         
     def __get_ERP__(self, idx):
         return self.ERP[idx]
@@ -238,7 +240,7 @@ class SimulatedERPDataset(ERPDataset):
             else:
                 if config['scaler']['type'] == 'MinMaxScaler':
                     feature_range = tuple(config['scaler']['feature_range'])
-                    print(f'feature_range: {feature_range}')
+                    logger.info(f'feature_range: {feature_range}')
                     scaler = eval(config['scaler']['type'])(feature_range=feature_range)
                 elif config['scaler']['type'] == 'RobustScaler':
                     scaler = eval(config['scaler']['type'])(quantile_range=(5.0, 95.0))   
@@ -248,7 +250,7 @@ class SimulatedERPDataset(ERPDataset):
             ERP_shape = ERP.shape
             ERP = scaler.transform(ERP.reshape(-1, 1)).reshape(ERP_shape)        
         super().__init__(self.n_sbjs, X, y, ERP, channels_in, channels_erp, config['ERP_types'], sr, scaler)
-        print(f'self.epoch_nums: {self.epoch_nums}')        
+        logger.info(f'self.epoch_nums: {self.epoch_nums}')        
         
     def __get_ERP__(self, idx):
         return self.ERP[idx]
@@ -307,8 +309,8 @@ class SimulatedERPDataset(ERPDataset):
                grand_ltc = ltc
                break
         grand_w = findERPWidth(grand_erps[chn_idx_out[0]], min_w, max_w)
-        print(f'grand_ltc: {grand_ltc}')
-        print(f'grand_w: {grand_w}')
+        logger.info(f'grand_ltc: {grand_ltc}')
+        logger.info(f'grand_w: {grand_w}')
         
         # Sampling the mean and std for latency distribution of each subject
         ltc_dist = grand_erps[chn_idx_out[0]][min_ltc:max_ltc]
@@ -321,7 +323,7 @@ class SimulatedERPDataset(ERPDataset):
             non_target = self.X[i][self.y[i] == 0].mean(axis=0, keepdims=False)
             (nepochs, n_chns, L) = self.X[i].shape
             if latencies[i] is None:
-                print(f'No ERP latency detected for subject {i}')
+                logger.info(f'No ERP latency detected for subject {i}')
                 labels, weights = np.unique(self.y[i], return_counts=True)
                 erp = np.zeros((nepochs, len(chn_idx_out), L))
                 for j in range(len(labels)):

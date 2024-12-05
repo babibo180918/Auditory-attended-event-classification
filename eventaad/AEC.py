@@ -16,6 +16,8 @@ from .BaseNet import *
 from .EEGModels import *
 from .convLSTM import ConvLSTM
 from utils.utils import *
+from utils import logging
+logger = logging.getLogger()
 
 class LinearClassifier(nn.Module):
     def __init__(self, config:dict):
@@ -78,7 +80,7 @@ class AECNet(BaseNet):
         
     def __visualize__(self, X, y_true, y_hat, sr, scaler, filename, title):
         if scaler!=None:
-            print('transforming scaler')
+            logger.info('transforming scaler')
             X = scaler.inverse_transform(X)
             y_true = scaler.inverse_transform(y_true)
             y_hat = scaler.inverse_transform(y_hat)
@@ -117,23 +119,23 @@ class AECNet(BaseNet):
                     nn.init.xavier_uniform_(param)
                     #nn.init.normal_(param)
         if self.pretrained is not None:
-            print(f'Loading pretrained model: {self.pretrained}')
+            logger.info(f'Loading pretrained model: {self.pretrained}')
             states = torch.load(self.pretrained)
             self.load_state_dict(states)
         if self.pretrained_feature_extractor is not None:
-            print(f'Loading pretrained feature extractor: {self.pretrained_feature_extractor}')
+            logger.info(f'Loading pretrained feature extractor: {self.pretrained_feature_extractor}')
             states = torch.load(self.pretrained_feature_extractor)
             self.feature_extractor.load_state_dict(states)
         if self.feature_freeze:
-            print('freezing feature')
+            logger.info('freezing feature')
             for param in self.feature_extractor.parameters():
                 param.requires_grad = False
         if self.pretrained_classifier is not None:
-            print(f'Loading pretrained classifier: {self.pretrained_classifier}')
+            logger.info(f'Loading pretrained classifier: {self.pretrained_classifier}')
             states = torch.load(self.pretrained_classifier)
             self.classifier.load_state_dict(states)
         if self.classifier_freeze:
-            print('freezing classifier')
+            logger.info('freezing classifier')
             for param in self.classifier.parameters():
                 param.requires_grad = False
             

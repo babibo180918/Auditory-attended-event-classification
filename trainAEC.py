@@ -16,6 +16,7 @@ import eventaad.loss as L
 from eventaad.loss import *
 from utils.parallel import *
 from utils.utils import *
+from utils import logging
 
 global NUM_SBJS
 NUM_SBJS = 24
@@ -94,7 +95,7 @@ def trainSubjecIndependent(config, jobname):
                     X.append(new_X)
                 X = 1e6*np.concatenate(X)
                 data_shape = X.shape
-                print(f'Raw data shape: {data_shape}')
+                logger.info(f'Raw data shape: {data_shape}')
                 X = X.reshape(-1, 1)
                 if dataset_params['scaler']['type'] == 'MinMaxScaler':
                     feature_range = tuple(dataset_params['scaler']['feature_range'])
@@ -116,7 +117,7 @@ def trainSubjecIndependent(config, jobname):
         train_accs, test_accs, train_F1, test_F1, thrhs, separated_accs, separated_F1 = fold_parallel(devices, np.arange(nFold), loaded_data, scaler, splits, config, jobname)
     else:
         for fold in range(nFold):
-            print(f'********** training - Fold {fold} **********')
+            logger.info(f'********** training - Fold {fold} **********')
             mixed_trainset = None
             mixed_validset = None
             mixed_testset = None
@@ -125,9 +126,9 @@ def trainSubjecIndependent(config, jobname):
                 trainset = MixedERPDataset(trainset, scaler)
                 validset = MixedERPDataset(validset, scaler)
                 testset = MixedERPDataset(testset, scaler)
-                print(f'mixed trainset: {len(trainset)}')
-                print(f'mixed validset: {len(validset)}')
-                print(f'mixed testset: {len(testset)}')
+                logger.info(f'mixed trainset: {len(trainset)}')
+                logger.info(f'mixed validset: {len(validset)}')
+                logger.info(f'mixed testset: {len(testset)}')
             else:
                 trainset, validset, testset = get_splited_datasets(fold, loaded_data, splits, dataset_params)
             
@@ -176,19 +177,19 @@ def trainSubjecIndependent(config, jobname):
                     _, separated_accs[1,idx,fold], separated_F1[1,idx,fold],_ = evaluate(model, loader2, ds2.scaler, devices, criterion, sr, threshold=thrhs[fold], model_path=model_path, jobname=f'{jobname}_SI_ds_{idx}_fold_{fold}', print_output=False, weighted=True)          
                     del ds1, ds2                        
             del trainset, validset, testset, mixed_trainset, mixed_validset, mixed_testset
-            print(f'Fold {fold} results:')
-            print(f'valid_loss: {train_loss}')
-            print(f'test_accs: {test_accs[fold]}')
-            print(f'test_F1: {test_F1[fold]}')
-            print(f'dataset accs: {separated_accs[...,fold]}')
-            print(f'dataset F1: {separated_F1[...,fold]}')
-    print(f'train_accs: {train_accs}')
-    print(f'test_accs: {test_accs}')
-    print(f'train_F1: {train_F1}')
-    print(f'test_F1: {test_F1}')
-    print(f'thresholds: {thrhs}')
-    print(f'dataset accs: {separated_accs}')
-    print(f'dataset F1: {separated_F1}')
+            logger.info(f'Fold {fold} results:')
+            logger.info(f'valid_loss: {train_loss}')
+            logger.info(f'test_accs: {test_accs[fold]}')
+            logger.info(f'test_F1: {test_F1[fold]}')
+            logger.info(f'dataset accs: {separated_accs[...,fold]}')
+            logger.info(f'dataset F1: {separated_F1[...,fold]}')
+    logger.info(f'train_accs: {train_accs}')
+    logger.info(f'test_accs: {test_accs}')
+    logger.info(f'train_F1: {train_F1}')
+    logger.info(f'test_F1: {test_F1}')
+    logger.info(f'thresholds: {thrhs}')
+    logger.info(f'dataset accs: {separated_accs}')
+    logger.info(f'dataset F1: {separated_F1}')
     
     return train_accs, test_accs, separated_accs, train_F1, test_F1, separated_F1
     
@@ -269,7 +270,7 @@ def trainAndCrossValidate(config, jobname):
                     X.append(new_X)
                 X = 1e6*np.concatenate(X)
                 data_shape = X.shape
-                print(f'Raw data shape: {data_shape}')
+                logger.info(f'Raw data shape: {data_shape}')
                 X = X.reshape(-1, 1)
                 if dataset_params['scaler']['type'] == 'MinMaxScaler':
                     feature_range = tuple(dataset_params['scaler']['feature_range'])
@@ -287,7 +288,7 @@ def trainAndCrossValidate(config, jobname):
     splits = make_splits(loaded_data, nFold)
     
     for i in range(from_sbj, to_sbj):            
-        print(f'********** training - cross subject {i} **********')
+        logger.info(f'********** training - cross subject {i} **********')
         train_idxs = []
         test_idxs = []            
         # LOSO
@@ -296,17 +297,17 @@ def trainAndCrossValidate(config, jobname):
                 train_idxs.append(j)
             else:
                 test_idxs.append(j)
-        print(f'train subjects: {train_idxs}')
-        print(f'test subject: {test_idxs}')
+        logger.info(f'train subjects: {train_idxs}')
+        logger.info(f'test subject: {test_idxs}')
         if type(loaded_data) is list:
             trs, vs, ts = get_mixed_splited_datasets(0, loaded_data, splits, copy.deepcopy(dataset_params), train_idxs)
             trainset = MixedERPDataset(trs, scaler)
             validset = MixedERPDataset(vs+ts, scaler)
             trs, vs, ts = get_mixed_splited_datasets(0, loaded_data, splits, copy.deepcopy(dataset_params), test_idxs)
             testset = MixedERPDataset(trs+vs+ts, scaler)
-            print(f'mixed trainset: {len(trainset)}')
-            print(f'mixed validset: {len(validset)}')
-            print(f'mixed testset: {len(testset)}')
+            logger.info(f'mixed trainset: {len(trainset)}')
+            logger.info(f'mixed validset: {len(validset)}')
+            logger.info(f'mixed testset: {len(testset)}')
         else:
             trainset, vs, ts = get_splited_datasets(0, loaded_data, splits, dataset_params, train_idxs)
             validset = MixedERPDataset([vs,ts], scaler)
@@ -359,13 +360,13 @@ def trainAndCrossValidate(config, jobname):
                 del ds                        
             del mixed_trainset, mixed_validset, mixed_testset, trs, vs, ts
         del trainset, validset, testset    
-        print(f'train_accs: {train_accs}')
-        print(f'test_accs: {test_accs}')
-        print(f'train_F1: {train_F1}')
-        print(f'test_F1: {test_F1}')
-        print(f'thresholds: {thrhs}')
-        print(f'dataset accs: {separated_accs}')
-        print(f'dataset F1: {separated_F1}')
+        logger.info(f'train_accs: {train_accs}')
+        logger.info(f'test_accs: {test_accs}')
+        logger.info(f'train_F1: {train_F1}')
+        logger.info(f'test_F1: {test_F1}')
+        logger.info(f'thresholds: {thrhs}')
+        logger.info(f'dataset accs: {separated_accs}')
+        logger.info(f'dataset F1: {separated_F1}')
     
     return train_accs, test_accs, separated_accs, train_F1, test_F1, separated_F1
     
@@ -447,7 +448,7 @@ def trainSubjecSpecific(config, jobname):
                     X.append(new_X)
                 X = 1e6*np.concatenate(X)
                 data_shape = X.shape
-                print(f'Raw data shape: {data_shape}')
+                logger.info(f'Raw data shape: {data_shape}')
                 X = X.reshape(-1, 1)
                 if dataset_params['scaler']['type'] == 'MinMaxScaler':
                     feature_range = tuple(dataset_params['scaler']['feature_range'])
@@ -465,15 +466,15 @@ def trainSubjecSpecific(config, jobname):
     
     for i in range(from_sbj, to_sbj):
         for fold in range(nFold):
-            print(f'********** training - Subject {i}, Fold {fold} **********')
+            logger.info(f'********** training - Subject {i}, Fold {fold} **********')
             if type(loaded_data) is list:
                 trainset, validset, testset = get_mixed_splited_datasets(fold, loaded_data, splits, copy.deepcopy(dataset_params), [i])
                 trainset = MixedERPDataset(trainset, scaler)
                 validset = MixedERPDataset(validset, scaler)
                 testset = MixedERPDataset(testset, scaler)
-                print(f'mixed trainset: {len(trainset)}')
-                print(f'mixed validset: {len(validset)}')
-                print(f'mixed testset: {len(testset)}')
+                logger.info(f'mixed trainset: {len(trainset)}')
+                logger.info(f'mixed validset: {len(validset)}')
+                logger.info(f'mixed testset: {len(testset)}')
             else:
                 trainset, validset, testset = get_splited_datasets(fold, loaded_data, splits, dataset_params, [i])
             
@@ -520,12 +521,12 @@ def trainSubjecSpecific(config, jobname):
                     del ds1, ds2                      
                 
             del trainset, validset, testset
-        print(f'train_accs: {np.mean(train_accs, -1, keepdims=False)[i]}')
-        print(f'test_accs: {np.mean(test_accs, -1, keepdims=False)[i]}')
-        print(f'train_F1: {np.mean(train_F1, -1, keepdims=False)[i]}')
-        print(f'test_F1: {np.mean(test_F1, -1, keepdims=False)[i]}')
-        print(f'dataset accs: {np.mean(separated_accs, -1, keepdims=False)[...,i]}')
-        print(f'dataset F1: {np.mean(separated_F1, -1, keepdims=False)[...,i]}')
+        logger.info(f'train_accs: {np.mean(train_accs, -1, keepdims=False)[i]}')
+        logger.info(f'test_accs: {np.mean(test_accs, -1, keepdims=False)[i]}')
+        logger.info(f'train_F1: {np.mean(train_F1, -1, keepdims=False)[i]}')
+        logger.info(f'test_F1: {np.mean(test_F1, -1, keepdims=False)[i]}')
+        logger.info(f'dataset accs: {np.mean(separated_accs, -1, keepdims=False)[...,i]}')
+        logger.info(f'dataset F1: {np.mean(separated_F1, -1, keepdims=False)[...,i]}')
     train_accs = np.mean(train_accs, -1, keepdims=False)
     test_accs = np.mean(test_accs, -1, keepdims=False)
     train_F1 = np.mean(train_F1, -1, keepdims=False)
@@ -534,20 +535,21 @@ def trainSubjecSpecific(config, jobname):
     separated_F1 = np.mean(separated_F1, -1, keepdims=False)  
     thrhs = np.mean(thrhs, -1, keepdims=False)
     
-    print(f'train_accs: {train_accs}')
-    print(f'test_accs: {test_accs}')
-    print(f'train_F1: {train_F1}')
-    print(f'test_F1: {test_F1}')
-    print(f'thresholds: {thrhs}')
-    print(f'dataset accs: {separated_accs}')
-    print(f'dataset F1: {separated_F1}')    
+    logger.info(f'train_accs: {train_accs}')
+    logger.info(f'test_accs: {test_accs}')
+    logger.info(f'train_F1: {train_F1}')
+    logger.info(f'test_F1: {test_F1}')
+    logger.info(f'thresholds: {thrhs}')
+    logger.info(f'dataset accs: {separated_accs}')
+    logger.info(f'dataset F1: {separated_F1}')    
     
     return train_accs, test_accs, separated_accs, train_F1, test_F1, separated_F1
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='Auditory attention event classifier training.')
-    parser.add_argument("--jobname", type=str, required=True, help="Name of training entity.")
-    parser.add_argument("--configs", type=str, required=True, nargs='+', help="Config file path.")
+    parser.add_argument("-j", "--jobname", type=str, required=True, help="Name of training entity.")
+    parser.add_argument("-c", "--configs", type=str, required=True, nargs='+', help="Config file path.")
+    parser.add_argument("-v", "--verbose", type=bool, default=False, help="Enable DEBUG verbose mode.")
     args = parser.parse_args()
     jobname = args.jobname
     configs = []
@@ -557,6 +559,8 @@ if __name__ == '__main__':
             file.close()
             configs.append(config)
     output_path = os.path.abspath(configs[0]['setup']['output_path'])
+    logging.setup_logging(verbose=args.verbose, jobname=args.jobname, outpath=output_path)
+    logger = logging.getLogger()
     
     all_SI_train_accs = [0]*len(configs)
     all_SI_test_accs = [0]*len(configs)

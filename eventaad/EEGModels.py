@@ -3,6 +3,7 @@ import numpy as np
 import math
 import torch
 import torch.nn as nn
+from utils import logging
 
 class DepthwiseConv2D(nn.Module):
     def __init__(self,
@@ -287,7 +288,7 @@ class ERPEncoder(nn.Module):
         test_tensor = torch.flatten(test_tensor, -3, -1)
         self.rnn_layer = nn.LSTM(input_size=test_tensor.shape[-1], hidden_size=dense_size, batch_first=True, num_layers=1, dropout=dropoutRate)
     def forward(self, X, y=None):
-        #print(f'encoder_in: {X.shape}')
+        #logging.getLogger().info(f'encoder_in: {X.shape}')
         batch_size = X.shape[0]
         X = X.transpose(-2, -1).reshape(-1, self.cnn_input_shape[-3], self.cnn_input_shape[-2], self.cnn_input_shape[-1])
         for i in range(self.depth):
@@ -298,7 +299,7 @@ class ERPEncoder(nn.Module):
         h0 = h0.to(X.device)
         c0 = c0.to(X.device)        
         X, (hn,cn) = self.rnn_layer(X,(h0,c0))
-        #print(f'encoder_out: {X[:,-1,:].shape}')
+        #logging.getLogger().info(f'encoder_out: {X[:,-1,:].shape}')
         return X[:,-1,:]
         
     def init_rnn_hidden(self, batch_size, hidden_size, layer_nums, D):
@@ -371,7 +372,7 @@ class ERPDecoder(nn.Module):
         self.reconstruct_layer = nn.Conv2d(in_channels=cnn_out_chns, out_channels=1, kernel_size=(1,1), padding='same')
         
     def forward(self, X, y=None):
-        #print(f'decoder_in: {X.shape}')
+        #logging.getLogger().info(f'decoder_in: {X.shape}')
         batch_size = X.shape[0]
         X = X.unsqueeze(1).repeat(1,self.L, 1)
         (h0, c0) = self.init_rnn_hidden(batch_size, self.rnn_hidden_size, 1, 1)
@@ -383,7 +384,7 @@ class ERPDecoder(nn.Module):
             X = self.dec_cnn_layers[i](X)
         X = self.reconstruct_layer(X).squeeze()
         X = X.reshape(batch_size, self.L, -1).transpose(-2,-1)
-        #print(f'decoder_out: {X.shape}')
+        #logging.getLogger().info(f'decoder_out: {X.shape}')
         return X
     def init_rnn_hidden(self, batch_size, hidden_size, layer_nums, D):
         return (torch.zeros(layer_nums*D, batch_size, hidden_size),
