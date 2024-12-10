@@ -9,6 +9,7 @@ import librosa
 import random
 import logging
 
+import scipy
 from sklearn.manifold import TSNE
 from string import ascii_uppercase
 from pandas import DataFrame
@@ -120,6 +121,10 @@ def binary_accuracy(y_hat, y_true, thresh=0.5):
     y_pred = y_hat>thresh
     accuracy = (y_pred == y_true).float().mean()   
     return accuracy
+    
+def pearson_scorer(estimator, X, y):
+    y_pred = estimator.predict(X)
+    return scipy.stats.pearsonr(np.ravel(y), np.ravel(y_pred))[0]    
     
 def metrics(y_hat,y_true, thresh=None, weighted=False):
     if (thresh is None):

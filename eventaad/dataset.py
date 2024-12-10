@@ -22,6 +22,135 @@ MIN_WIDTH = 0.3
 MAX_WIDTH = 0.6
 PRE_STIMULUS = 0.2
 
+def nan_helper(y):
+    return np.isnan(y), lambda z: z.nonzero()[0]
+
+def make_conv(X, y, z, evt_y=None, evt_z=None,  eeg_context=1, aud_context=1, padding=0):
+    """Return A matrix and b vector for Aw=b.
+    
+    Arguments
+    ---------
+    X : array, (ch by time sample) eeg
+    y : array, (time sample) attd envelope
+    z : array, (time sample) unattended envelope
+    num_context : scalar, number of time samples in a frame aka number of columns in A.
+    
+    Returns
+    -------
+    X_out : array, (num frames, num_context * num_ch) Reshaped EEG for least squares
+            ch0, t0 ... tN, ch1 t0 ... tN     
+    y_out : array, (num frames, 1) Attended audio
+    z_out : array, (num frames, 1) Unattended audio
+    
+    """
+    assert X.shape[-1]==y.shape[-1] and y.shape[-1]==z.shape[-1] , "Size of inputs are mismatched."    
+    (num_ch,L) = X.shape
+    # interpolate NaN values.
+    nans, x = nan_helper(X)
+    X[nans]= np.interp(x(nans), x(~nans), X[~nans])
+    
+    X = np.pad(X, pad_width=((0,0),(0,eeg_context-1)), constant_values=padding)
+    y = np.pad(y, pad_width=((aud_context-1,0)), constant_values=padding)
+    z = np.pad(z, pad_width=((aud_context-1,0)), constant_values=padding)
+    if evt_y is not None:
+        evt_y = np.pad(evt_y, pad_width=((aud_context-1,0)), constant_values=padding)
+    if evt_z is not None:
+        evt_z = np.pad(evt_z, pad_width=((aud_context-1,0)), constant_values=padding)          
+
+    # Create output:  
+    num_output = X.shape[-1] - eeg_context + 1
+    X_out = np.nan * np.ones((num_output, eeg_context * num_ch))
+    y_out = np.nan * np.ones((num_output, aud_context))
+    z_out = np.nan * np.ones((num_output, aud_context))
+    evt_y_out = np.nan * np.ones((num_output, aud_context)) if evt_y is not None else None 
+    evt_z_out = np.nan * np.ones((num_output, aud_context))  if evt_z is not None else None    
+    for idx in range(num_output):
+        eeg_idx_keep = idx + np.arange(eeg_context)
+        X_out[idx] = np.ravel(X[:, eeg_idx_keep])
+        aud_idx_keep = idx + np.arange(aud_context)
+        y_out[idx] = np.ravel(y[..., aud_idx_keep])  
+        z_out[idx] = np.ravel(z[..., aud_idx_keep])    
+        if evt_y is not None:
+            evt_y_out[idx] = np.ravel(evt_y[..., aud_idx_keep])
+        if evt_z is not None:
+            evt_z_out[idx] = np.ravel(evt_z[..., aud_idx_keep])  
+    
+    return X_out, y_out, z_out, evt_y_out, evt_z_out
+
+def getLinearEnvelopeData(loaded_data, config, trial_idxs):       
+    sr = loaded_data['sr']
+    chns = loaded_data['channels']
+    eegs = loaded_data['eeg']
+    envs = loaded_data['audio']
+    y_trues = loaded_data['attdSpeaker']
+    attd_events = loaded_data['attdEvent']
+    unattd_events = loaded_data['unAttdEvent']
+    eeg_context = round(config['eeg_context']*sr) + 1
+    aud_context = 1
+    if "aud_context" in config:
+        aud_context = round(config['aud_context']*sr) + 1
+    ds_chns = np.array(config['channels'])
+    selected_chns = [list(chns).index(ch) for ch in ds_chns]    
+    groups_all = []
+    eeg_all = []
+    attd_env_all = []
+    unattd_env_all = []
+    attd_evt_all = []
+    unattd_evt_all = []    
+    data_len = 0
+    if trial_idxs is None:
+        trial_idxs = range(len(eegs))
+    for i in trial_idxs:
+        eeg = eegs[i][:,selected_chns].T
+        y_true = y_trues[i]-1
+        attd_env = envs[i].T[y_true]
+        unattd_env = envs[i].T[1-y_true]
+        eeg, attd_env, unattd_env, _, _ = make_conv(eeg, attd_env, unattd_env, eeg_context=eeg_context, aud_context=aud_context)
+        groups = list(trial_idxs).index(i) * np.ones(eeg.shape[0])
+        eeg_all.append(eeg)
+        attd_env_all.append(attd_env)
+        unattd_env_all.append(unattd_env)
+        attd_evt_all.append(attd_events[i]+aud_context+data_len)
+        unattd_evt_all.append(unattd_events[i]+aud_context+data_len)        
+        groups_all.append(groups)
+        data_len += attd_env.shape[0]
+        del eeg, attd_env, unattd_env
+    
+    del eegs, envs, y_trues
+    
+    eeg_all = np.concatenate(eeg_all, axis=0)
+    attd_env_all = np.concatenate(attd_env_all, axis=0)
+    unattd_env_all = np.concatenate(unattd_env_all, axis=0)
+    attd_evt_all = np.concatenate(attd_evt_all)
+    unattd_evt_all = np.concatenate(unattd_evt_all)
+    groups_all = np.concatenate(groups_all, axis=0)
+    n_samples = eeg_all.shape[0]
+    
+    # eeg scaling
+    scaler_path = config['scaler']['path']
+    scaler = None
+    if scaler_path is not None:
+        scaler_path = os.path.expandvars(config['scaler']['path'])
+        if os.path.exists(scaler_path):
+            print(f'Loading scaler: {scaler_path}')
+            scaler = joblib.load(scaler_path)
+        else:    
+            if config['scaler']['type'] == 'MinMaxScaler':
+                feature_range = tuple(config['scaler']['feature_range'])
+                scaler = MinMaxScaler(feature_range=feature_range)
+            elif config['scaler']['type'] == 'RobustScaler':
+                scaler = RobustScaler(quantile_range=(5.0, 95.0))   
+            scaler.fit_transform(eeg_all.reshape(-1,1))
+    if scaler is not None:
+        eeg_all = scaler.transform(eeg_all.reshape(-1,1)).reshape(n_samples, -1)
+    
+    # audio scaling  
+    audio_scaler = RobustScaler(quantile_range=(0.1, 99.9))
+    attd_env_all = audio_scaler.fit_transform(attd_env_all)
+    unattd_env_all = audio_scaler.fit_transform(unattd_env_all)
+                
+    return eeg_all, attd_env_all, unattd_env_all, attd_evt_all, unattd_evt_all, groups_all 
+
 def makeSinERP(length, ERP_ltc, erp_w, sr, amps, snr=0):
     chns = len(amps.shape)
     nepochs = len(ERP_ltc)
