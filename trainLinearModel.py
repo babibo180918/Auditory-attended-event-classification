@@ -21,14 +21,8 @@ from utils.parallel import *
 from utils.utils import pearson_scorer
 from utils import logging
 logger = logging.getLogger()
-import matplotlib.pyplot as plt
 
-global NUM_SBJS
-NUM_SBJS = 24
-WINDOWS = [1.2]
 RIDGE_ALPHAS = tuple(10**(i/2) for i in range(-4,10))
-
-from torchsummary import summary
   
 def trainLinearEnvelope(model_config, trainset, testset, windows, sr, eeg_context, step=1.0):
     if isinstance(trainset, list):
@@ -81,9 +75,6 @@ def trainLinearEnvelope(model_config, trainset, testset, windows, sr, eeg_contex
         score_unattn_tr = []
         score_attn_te = []
         score_unattn_te = []
-        #
-        score_attn_te_evt = []
-        score_unattn_te_evt = []
 
         start = 0
         end = start + L
@@ -99,26 +90,41 @@ def trainLinearEnvelope(model_config, trainset, testset, windows, sr, eeg_contex
             score_attn_te.append(pearson_scorer(model, eeg_te[start:end], attd_env_te[start:end]))
             score_unattn_te.append(pearson_scorer(model, eeg_te[start:end], unattd_env_te[start:end]))                
             start += step
-            end += step            
+            end += step     
+
+        score_attn_tr = np.array(score_attn_tr)   
+        score_unattn_tr = np.array(score_unattn_tr)
+        score_attn_te = np.array(score_attn_te)
+        score_unattn_te = np.array(score_unattn_te) 
+        train_accs.append((score_attn_tr>=score_unattn_tr).astype(float).mean())
+        test_accs.append((score_attn_te>=score_unattn_te).astype(float).mean())        
         
+        # test on event locations only
+        score_attn_te_evt = []
+        score_unattn_te_evt = []        
         for i in attd_evt_te:
             start = i-int((w-eeg_context)*sr/2)
             end = start + L
             if end<=attd_env_te.shape[0]:
                 score_attn_te_evt.append(pearson_scorer(model, eeg_te[start:end], attd_env_te[start:end]))
                 score_unattn_te_evt.append(pearson_scorer(model, eeg_te[start:end], unattd_env_te[start:end]))
-            
-        score_attn_tr = np.array(score_attn_tr)   
-        score_unattn_tr = np.array(score_unattn_tr)
-        score_attn_te = np.array(score_attn_te)
-        score_unattn_te = np.array(score_unattn_te)
         score_attn_te_evt = np.array(score_attn_te_evt)
-        score_unattn_te_evt = np.array(score_unattn_te_evt)        
-
+        score_unattn_te_evt = np.array(score_unattn_te_evt)
+        attd_acc = (score_attn_te_evt>=score_unattn_te_evt).astype(float).mean()
         
-        train_accs.append((score_attn_tr>=score_unattn_tr).astype(float).mean())
-        test_accs.append((score_attn_te>=score_unattn_te).astype(float).mean())        
-        test_accs_evt.append((score_attn_te_evt>=score_unattn_te_evt).astype(float).mean())   
+        score_attn_te_evt = []
+        score_unattn_te_evt = []               
+        for i in unattd_evt_te:
+            start = i-int((w-eeg_context)*sr/2)
+            end = start + L
+            if end<=attd_env_te.shape[0]:
+                score_attn_te_evt.append(pearson_scorer(model, eeg_te[start:end], attd_env_te[start:end]))
+                score_unattn_te_evt.append(pearson_scorer(model, eeg_te[start:end], unattd_env_te[start:end]))                
+        score_attn_te_evt = np.array(score_attn_te_evt)
+        score_unattn_te_evt = np.array(score_unattn_te_evt)
+        unattd_acc = (score_attn_te_evt>=score_unattn_te_evt).astype(float).mean()
+        
+        test_accs_evt.append((attd_acc+unattd_acc)/2)
             
     logger.info(f'train_accs: {train_accs}')
     logger.info(f'test_accs: {test_accs}') 
@@ -141,14 +147,11 @@ def trainSubjecIndependent(config, jobname):
         data_files[i] = path
     channels = dataset_params['channels']
     sr = dataset_params['sr']
-    NUM_SBJS = dataset_params['num_sbjs']
-    all_sbjs = np.array(dataset_params['pretrained_sbjs'])
-    from_sbj = dataset_params['from_sbj']
-    to_sbj = dataset_params['to_sbj']    
-    T = dataset_params['T'] # seconds
-    L = int(sr*T) # sample
-    max_len = dataset_params['max_len'] # events
-    n_streams = dataset_params['n_streams']    
+    all_sbjs = np.array(dataset_params['all_sbjs'])
+    num_sbjs = len(all_sbjs)
+    from_sbj = dataset_params['from_sbj']    
+    to_sbj = dataset_params['to_sbj']
+    windows = dataset_params['windows']
     eeg_context = round(dataset_params['eeg_context']*sr) + 1
     model_params = config['model']
     
@@ -174,10 +177,10 @@ def trainSubjecIndependent(config, jobname):
             joblib.dump(scaler, scaler_path)
             del eeg_all
     
-    train_accs = np.zeros((len(WINDOWS), NUM_SBJS))
-    test_accs = np.zeros((len(WINDOWS), NUM_SBJS))
-    train_F1 = np.zeros((len(WINDOWS), NUM_SBJS))
-    test_F1 = np.zeros((len(WINDOWS), NUM_SBJS))
+    train_accs = np.zeros((len(windows), num_sbjs))
+    test_accs = np.zeros((len(windows), num_sbjs))
+    train_F1 = np.zeros((len(windows), num_sbjs))
+    test_F1 = np.zeros((len(windows), num_sbjs))
         
     for s in range(from_sbj, to_sbj):
         logger.info(f'{datetime.now().time().replace(microsecond=0)} --- '
@@ -196,7 +199,7 @@ def trainSubjecIndependent(config, jobname):
         preload_data = loadmat(data_files[s], squeeze_me=True)
         testset.append(getLinearEnvelopeData(config=test_config, loaded_data=preload_data, trial_idxs=None))
         del preload_data        
-        train_accs[:,s], test_accs[:,s] = trainLinearEnvelope(model_params, trainset, testset, WINDOWS, sr, eeg_context)
+        train_accs[:,s], test_accs[:,s] = trainLinearEnvelope(model_params, trainset, testset, windows, sr, eeg_context)
         logger.info(f'sbj {s} valid_accs: {train_accs[...,s]}')
         logger.info(f'sbj {s} test_accs: {test_accs[...,s]}')    
     
@@ -218,6 +221,7 @@ if __name__ == '__main__':
     output_path = os.path.abspath(configs[0]['setup']['output_path'])
     logging.setup_logging(verbose=args.verbose, jobname=args.jobname, outpath=output_path)
     logger = logging.getLogger()
+    logger.info('Verifying linear auditory attention classification based on stimulus envelope.')
     
     all_SI_train_accs = [0]*len(configs)
     all_SI_test_accs = [0]*len(configs)
@@ -233,6 +237,5 @@ if __name__ == '__main__':
     all_SI_test_accs = np.array(all_SI_test_accs).round(3)
     all_SI_train_F1 = np.array(all_SI_train_F1).round(3)
     all_SI_test_F1 = np.array(all_SI_test_F1).round(3)
-
     logger.info(f'all_SI_train_accs: {all_SI_train_accs}')
     logger.info(f'all_SI_test_accs: {all_SI_test_accs}')

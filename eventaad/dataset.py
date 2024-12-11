@@ -132,7 +132,7 @@ def getLinearEnvelopeData(loaded_data, config, trial_idxs):
     if scaler_path is not None:
         scaler_path = os.path.expandvars(config['scaler']['path'])
         if os.path.exists(scaler_path):
-            print(f'Loading scaler: {scaler_path}')
+            logger.info(f'Loading scaler: {scaler_path}')
             scaler = joblib.load(scaler_path)
         else:    
             if config['scaler']['type'] == 'MinMaxScaler':
