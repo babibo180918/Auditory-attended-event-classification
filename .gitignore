@@ -127,3 +127,4 @@ data/*.*
 scripts
 config
 !config/config_AECNet1.yml
+!config/config_Linear.yml
